@@ -1,0 +1,372 @@
+//@version=6
+indicator("Professional MTF FVG Inversion + BOS Trend System (v2)", overlay=true, max_boxes_count=500)
+
+// ============================================================================
+// GLOBAL CONFIGURATION
+// ============================================================================
+group_general = "GENERAL SETTINGS"
+show_htf_on_ltf  = input.bool(true,  "Show HTF Inversions on LTF Charts", group=group_general)
+cleanup_extremes = input.bool(true,  "Delete Rectangles on New High/Low", group=group_general)
+show_bos_lines   = input.bool(true,  "Show BOS Lines on Chart", group=group_general)
+
+group_table = "TABLE SETTINGS"
+table_position = input.string("top_right", "Table Position", options=["top_right","top_left","bottom_right","bottom_left"], group=group_table)
+
+// ============================================================================
+// TIMEFRAME CONFIG (3m, 5m, 15m, 30m, 1H, 4H)
+// ============================================================================
+type TF_Config
+    string tfstr
+    string tfname
+    bool enabled
+    color bull_fill
+    color bear_fill
+    color bull_border
+    color bear_border
+    int border_width
+    int opacity
+    int rect_width
+    bool show_label
+    
+get_tf_configs() =>
+    tf_configs = array.new<TF_Config>()
+    
+    // 3m
+    array.push(tf_configs, TF_Config.new(
+        "3", "3m",
+        input.bool(true, "3m Enable", group="3M"),
+        input.color(color.new(color.green, 80), "Bull Fill", group="3M", inline="3col"),
+        input.color(color.new(color.red, 80),   "Bear Fill", group="3M", inline="3col"),
+        input.color(color.gray, "Bull Border", group="3M", inline="3bord"),
+        input.color(color.gray, "Bear Border", group="3M", inline="3bord"),
+        input.int(1, "Border Width", minval=1, maxval=5, group="3M", inline="3w"),
+        input.int(80, "Opacity", minval=0, maxval=100, group="3M", inline="3op"),
+        input.int(10, "Width", minval=3, maxval=50, group="3M", inline="3wd"),
+        input.bool(true, "Label", group="3M", inline="3lbl")
+    ))
+    
+    // 5m
+    array.push(tf_configs, TF_Config.new(
+        "5", "5m",
+        input.bool(true, "5m Enable", group="5M"),
+        input.color(color.new(color.green, 80), "Bull Fill", group="5M", inline="5col"),
+        input.color(color.new(color.red, 80),   "Bear Fill", group="5M", inline="5col"),
+        input.color(color.gray, "Bull Border", group="5M", inline="5bord"),
+        input.color(color.gray, "Bear Border", group="5M", inline="5bord"),
+        input.int(1, "Border Width", minval=1, maxval=5, group="5M", inline="5w"),
+        input.int(80, "Opacity", minval=0, maxval=100, group="5M", inline="5op"),
+        input.int(10, "Width", minval=3, maxval=50, group="5M", inline="5wd"),
+        input.bool(true, "Label", group="5M", inline="5lbl")
+    ))
+    
+    // 15m
+    array.push(tf_configs, TF_Config.new(
+        "15", "15m",
+        input.bool(true, "15m Enable", group="15M"),
+        input.color(color.new(color.green, 80), "Bull Fill", group="15M", inline="15col"),
+        input.color(color.new(color.red, 80),   "Bear Fill", group="15M", inline="15col"),
+        input.color(color.gray, "Bull Border", group="15M", inline="15bord"),
+        input.color(color.gray, "Bear Border", group="15M", inline="15bord"),
+        input.int(1, "Border Width", minval=1, maxval=5, group="15M", inline="15w"),
+        input.int(80, "Opacity", minval=0, maxval=100, group="15M", inline="15op"),
+        input.int(10, "Width", minval=3, maxval=50, group="15M", inline="15wd"),
+        input.bool(true, "Label", group="15M", inline="15lbl")
+    ))
+    
+    // 30m
+    array.push(tf_configs, TF_Config.new(
+        "30", "30m",
+        input.bool(true, "30m Enable", group="30M"),
+        input.color(color.new(color.green, 80), "Bull Fill", group="30M", inline="30col"),
+        input.color(color.new(color.red, 80),   "Bear Fill", group="30M", inline="30col"),
+        input.color(color.gray, "Bull Border", group="30M", inline="30bord"),
+        input.color(color.gray, "Bear Border", group="30M", inline="30bord"),
+        input.int(1, "Border Width", minval=1, maxval=5, group="30M", inline="30w"),
+        input.int(80, "Opacity", minval=0, maxval=100, group="30M", inline="30op"),
+        input.int(10, "Width", minval=3, maxval=50, group="30M", inline="30wd"),
+        input.bool(true, "Label", group="30M", inline="30lbl")
+    ))
+    
+    // 60m (1H)
+    array.push(tf_configs, TF_Config.new(
+        "60", "1H",
+        input.bool(true, "1H Enable", group="1H"),
+        input.color(color.new(color.green, 80), "Bull Fill", group="1H", inline="60col"),
+        input.color(color.new(color.red, 80),   "Bear Fill", group="1H", inline="60col"),
+        input.color(color.gray, "Bull Border", group="1H", inline="60bord"),
+        input.color(color.gray, "Bear Border", group="1H", inline="60bord"),
+        input.int(1, "Border Width", minval=1, maxval=5, group="1H", inline="60w"),
+        input.int(80, "Opacity", minval=0, maxval=100, group="1H", inline="60op"),
+        input.int(10, "Width", minval=3, maxval=50, group="1H", inline="60wd"),
+        input.bool(true, "Label", group="1H", inline="60lbl")
+    ))
+    
+    // 240m (4H)
+    array.push(tf_configs, TF_Config.new(
+        "240", "4H",
+        input.bool(true, "4H Enable", group="4H"),
+        input.color(color.new(color.green, 80), "Bull Fill", group="4H", inline="240col"),
+        input.color(color.new(color.red, 80),   "Bear Fill", group="4H", inline="240col"),
+        input.color(color.gray, "Bull Border", group="4H", inline="240bord"),
+        input.color(color.gray, "Bear Border", group="4H", inline="240bord"),
+        input.int(1, "Border Width", minval=1, maxval=5, group="4H", inline="240w"),
+        input.int(80, "Opacity", minval=0, maxval=100, group="4H", inline="240op"),
+        input.int(10, "Width", minval=3, maxval=50, group="4H", inline="240wd"),
+        input.bool(true, "Label", group="4H", inline="240lbl")
+    ))
+    
+    tf_configs
+
+var tf_configs = get_tf_configs()
+
+// ============================================================================
+// PER-TF STATE: TREND, FVGs, INVERSIONS
+// ============================================================================
+type TF_State
+    int trend                  // 1 = Bullish, -1 = Bearish
+    int last_bos               // 1 = Bullish BOS, -1 = Bearish BOS, 0 = None
+    box[] bull_fvgs            // Active bullish FVG boxes
+    box[] bear_fvgs            // Active bearish FVG boxes
+    int bull_count             // Count of active bullish FVGs
+    int bear_count             // Count of active bearish FVGs
+    bool inverted_this_bar     // Did inversion happen this bar?
+
+var tf_states = array.new<TF_State>()
+for i = 0 to array.size(tf_configs) - 1
+    array.push(tf_states, TF_State.new(1, 0, array.new<box>(), array.new<box>(), 0, 0, false))
+
+// ============================================================================
+// BOS DETECTION (SAME TIMEFRAME)
+// ============================================================================
+detect_bos() =>
+    var float last_swing_high = na
+    var float last_swing_low = na
+    var bool allow_bull_bos = true
+    var bool allow_bear_bos = true
+    
+    int bos_result = 0
+    
+    // Detect swing high (bearish candle after bullish)
+    if close[1] > open[1] and close < open
+        last_swing_high := math.max(high[1], high)
+    
+    // Detect swing low (bullish candle after bearish)
+    if close[1] < open[1] and close > open
+        last_swing_low := math.min(low[1], low)
+    
+    // Bullish BOS: break above swing high
+    if not na(last_swing_high) and close > last_swing_high and allow_bull_bos
+        bos_result := 1
+        allow_bull_bos := false
+        allow_bear_bos := true
+    
+    // Bearish BOS: break below swing low
+    if not na(last_swing_low) and close < last_swing_low and allow_bear_bos
+        bos_result := -1
+        allow_bear_bos := false
+        allow_bull_bos := true
+    
+    bos_result
+
+// ============================================================================
+// FVG DETECTION (SAME TIMEFRAME - BODY CLOSE ONLY)
+// ============================================================================
+detect_fvg() =>
+    // Bullish FVG: H[2] < L[0] (gap up)
+    bull_fvg = high[2] < low
+    bull_top = bull_fvg ? low : na
+    bull_bot = bull_fvg ? high[2] : na
+    
+    // Bearish FVG: L[2] > H[0] (gap down)
+    bear_fvg = low[2] > high
+    bear_top = bear_fvg ? low[2] : na
+    bear_bot = bear_fvg ? high : na
+    
+    [bull_fvg, bull_top, bull_bot, bear_fvg, bear_top, bear_bot]
+
+// ============================================================================
+// INVERSION CHECK (STRICT: BODY CLOSE ONLY, NO WICKS)
+// ============================================================================
+is_bullish_fvg_inverted(fvg_bottom) =>
+    // Bullish FVG inverted if current candle BODY closes fully below FVG bottom
+    close < fvg_bottom and open < fvg_bottom
+
+is_bearish_fvg_inverted(fvg_top) =>
+    // Bearish FVG inverted if current candle BODY closes fully above FVG top
+    close > fvg_top and open > fvg_top
+
+// ============================================================================
+// DRAW INVERSION RECTANGLE (HTF-aware)
+// ============================================================================
+draw_inversion_rect(top, bot, tf_idx, is_bullish) =>
+    cfg = array.get(tf_configs, tf_idx)
+    fill_col = color.new(is_bullish ? cfg.bull_fill : cfg.bear_fill, 100 - cfg.opacity)
+    border_col = is_bullish ? cfg.bull_border : cfg.bear_border
+    
+    rect = box.new(
+        left=bar_index - 1,
+        top=top,
+        right=bar_index + cfg.rect_width,
+        bottom=bot,
+        bgcolor=fill_col,
+        border_color=border_col,
+        border_width=cfg.border_width,
+        text=cfg.show_label ? cfg.tfname + " INV" : "",
+        text_size=size.tiny,
+        xloc=xloc.bar_index
+    )
+    rect
+
+// ============================================================================
+// MAIN PROCESSING LOOP (PER TIMEFRAME)
+// ============================================================================
+for tf_idx = 0 to array.size(tf_configs) - 1
+    cfg = array.get(tf_configs, tf_idx)
+    if not cfg.enabled
+        continue
+    
+    state = array.get(tf_states, tf_idx)
+    
+    // Fetch HTF data
+    [h, l, o, c] = request.security(syminfo.tickerid, cfg.tfstr, [high, low, open, close])
+    
+    // Detect BOS on this timeframe
+    bos_signal = request.security(syminfo.tickerid, cfg.tfstr, detect_bos())
+    if bos_signal != 0
+        state.last_bos := bos_signal
+        state.trend := bos_signal
+        // Clear all FVGs on BOS
+        for i = 0 to array.size(state.bull_fvgs) - 1
+            box.delete(array.get(state.bull_fvgs, i))
+        for i = 0 to array.size(state.bear_fvgs) - 1
+            box.delete(array.get(state.bear_fvgs, i))
+        array.clear(state.bull_fvgs)
+        array.clear(state.bear_fvgs)
+        state.bull_count := 0
+        state.bear_count := 0
+    
+    // Detect FVG on this timeframe
+    [bull_fvg, bull_top, bull_bot, bear_fvg, bear_top, bear_bot] = request.security(syminfo.tickerid, cfg.tfstr, detect_fvg())
+    
+    // === ADD NEW FVGs (only if trend allows) ===
+    // Bullish FVG: only add if trend is bullish (direction matches)
+    if bull_fvg and state.trend == 1
+        new_box = draw_inversion_rect(bull_top, bull_bot, tf_idx, true)
+        array.push(state.bull_fvgs, new_box)
+        state.bull_count += 1
+    
+    // Bearish FVG: only add if trend is bearish
+    if bear_fvg and state.trend == -1
+        new_box = draw_inversion_rect(bear_top, bear_bot, tf_idx, false)
+        array.push(state.bear_fvgs, new_box)
+        state.bear_count += 1
+    
+    // === CHECK INVERSIONS (BODY CLOSE ONLY) ===
+    state.inverted_this_bar := false
+    
+    // Check bullish FVGs for inversion
+    if array.size(state.bull_fvgs) > 0
+        for i = array.size(state.bull_fvgs) - 1 to 0 by 1
+            bx = array.get(state.bull_fvgs, i)
+            bot = box.get_bottom(bx)
+            
+            if is_bullish_fvg_inverted(bot)
+                box.delete(bx)
+                array.remove(state.bull_fvgs, i)
+                state.bull_count -= 1
+                state.inverted_this_bar := true
+    
+    // Check bearish FVGs for inversion
+    if array.size(state.bear_fvgs) > 0
+        for i = array.size(state.bear_fvgs) - 1 to 0 by 1
+            bx = array.get(state.bear_fvgs, i)
+            top = box.get_top(bx)
+            
+            if is_bearish_fvg_inverted(top)
+                box.delete(bx)
+                array.remove(state.bear_fvgs, i)
+                state.bear_count -= 1
+                state.inverted_this_bar := true
+    
+    // === TREND CHANGE LOGIC ===
+    // If all bullish FVGs inverted, trend flips to bearish
+    if state.trend == 1 and state.bull_count == 0 and state.inverted_this_bar
+        state.trend := -1
+    
+    // If all bearish FVGs inverted, trend flips to bullish
+    if state.trend == -1 and state.bear_count == 0 and state.inverted_this_bar
+        state.trend := 1
+    
+    // === CLEANUP ON NEW EXTREMES ===
+    if cleanup_extremes
+        highest = ta.highest(high, 3)
+        lowest = ta.lowest(low, 3)
+        if high == highest or low == lowest
+            for i = 0 to array.size(state.bull_fvgs) - 1
+                box.delete(array.get(state.bull_fvgs, i))
+            for i = 0 to array.size(state.bear_fvgs) - 1
+                box.delete(array.get(state.bear_fvgs, i))
+            array.clear(state.bull_fvgs)
+            array.clear(state.bear_fvgs)
+            state.bull_count := 0
+            state.bear_count := 0
+    
+    // Store back
+    array.set(tf_states, tf_idx, state)
+
+// ============================================================================
+// SYNCHRONIZED STATUS TABLE
+// ============================================================================
+pos = switch table_position
+    "top_left"      => position.top_left
+    "bottom_right"  => position.bottom_right
+    "bottom_left"   => position.bottom_left
+    => position.top_right
+
+var table status_table = table.new(pos, 5, 7, border_width=1, frame_color=color.gray)
+
+if barstate.isfirst
+    table.cell(status_table, 0, 0, "TF", bgcolor=color.black, text_color=color.white, text_size=size.small)
+    table.cell(status_table, 1, 0, "TREND", bgcolor=color.black, text_color=color.white, text_size=size.small)
+    table.cell(status_table, 2, 0, "LAST BOS", bgcolor=color.black, text_color=color.white, text_size=size.small)
+    table.cell(status_table, 3, 0, "BULL FVGs", bgcolor=color.black, text_color=color.white, text_size=size.small)
+    table.cell(status_table, 4, 0, "BEAR FVGs", bgcolor=color.black, text_color=color.white, text_size=size.small)
+
+if barstate.islast
+    for tf_idx = 0 to array.size(tf_configs) - 1
+        cfg = array.get(tf_configs, tf_idx)
+        state = array.get(tf_states, tf_idx)
+        
+        if not cfg.enabled
+            continue
+        
+        row = tf_idx + 1
+        
+        // TF Name
+        table.cell(status_table, 0, row, cfg.tfname, bgcolor=color.black, text_color=color.white, text_size=size.small)
+        
+        // Trend
+        trend_txt = state.trend == 1 ? "BULL" : "BEAR"
+        trend_col = state.trend == 1 ? color.green : color.red
+        table.cell(status_table, 1, row, trend_txt, bgcolor=trend_col, text_color=color.white, text_size=size.small)
+        
+        // Last BOS
+        bos_txt = state.last_bos == 1 ? "↑BULL" : state.last_bos == -1 ? "↓BEAR" : "NONE"
+        bos_col = state.last_bos == 1 ? color.blue : state.last_bos == -1 ? color.orange : color.gray
+        table.cell(status_table, 2, row, bos_txt, bgcolor=bos_col, text_color=color.white, text_size=size.small)
+        
+        // Bull FVG count
+        table.cell(status_table, 3, row, str.tostring(state.bull_count), bgcolor=color.new(color.green, 70), text_color=color.white, text_size=size.small)
+        
+        // Bear FVG count
+        table.cell(status_table, 4, row, str.tostring(state.bear_count), bgcolor=color.new(color.red, 70), text_color=color.white, text_size=size.small)
+
+// ============================================================================
+// BOS VISUALIZATION (OPTIONAL LINES ON CURRENT TF)
+// ============================================================================
+if show_bos_lines
+    bos = detect_bos()
+    if bos == 1
+        line.new(bar_index[1], close[1], bar_index, close, color=color.blue, width=2, extend=extend.right, xloc=xloc.bar_index)
+    if bos == -1
+        line.new(bar_index[1], close[1], bar_index, close, color=color.red, width=2, extend=extend.right, xloc=xloc.bar_index)
